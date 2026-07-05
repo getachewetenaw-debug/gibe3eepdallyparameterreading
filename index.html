@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIBE III HEPP DAILY PARAMETER READING</title>
+    <style>
+        :root {
+            --primary-color: #1a365d;
+            --secondary-color: #2b6cb0;
+            --accent-color: #319795;
+            --bg-color: #f7fafc;
+            --border-color: #cbd5e0;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; padding: 20px; background-color: var(--bg-color); color: #2d3748; }
+        h1, h2, h3 { text-align: center; color: var(--primary-color); text-transform: uppercase; margin-bottom: 5px; }
+        .header-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 15px; }
+        .meta-item { display: flex; flex-direction: column; }
+        .meta-item label { font-weight: bold; margin-bottom: 5px; color: var(--secondary-color); }
+        .meta-item input, .meta-item select { padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; }
+        
+        .status-banner { text-align: center; padding: 8px; margin: 10px 0; font-weight: bold; border-radius: 4px; }
+        .online { background-color: #c6f6d5; color: #22543d; }
+        .offline { background-color: #feebc8; color: #744210; }
+
+        .tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { padding: 10px 20px; background: #e2e8f0; border: none; cursor: pointer; font-weight: bold; border-radius: 4px; transition: 0.3s; }
+        .tab-btn.active { background: var(--primary-color); color: white; }
+
+        .table-container { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 1200px; font-size: 12px; }
+        th, td { border: 1px solid var(--border-color); padding: 6px; text-align: center; }
+        th { background-color: var(--primary-color); color: white; font-weight: 600; }
+        tr:nth-child(even) { background-color: #f7fafc; }
+        input[type="number"], input[type="text"] { width: 100%; padding: 4px; border: 1px solid transparent; text-align: center; background: transparent; }
+        input[type="number"]:focus, input[type="text"]:focus { background: white; border-color: var(--secondary-color); outline: none; }
+        
+        .btn-save { background-color: var(--accent-color); color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-weight: bold; }
+        .btn-save:hover { background-color: #2c7a7b; }
+        
+        .admin-panel { background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 30px; }
+        .control-row { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px; align-items: center; }
+        .btn-action { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-blue { background-color: var(--secondary-color); }
+        .btn-green { background-color: #38a169; }
+        .btn-red { background-color: #e53e3e; }
+
+        .hidden { display: none; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 30px; border-radius: 8px; width: 350px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .modal-content input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid var(--border-color); border-radius: 4px; }
+        
+        @media print {
+            body { padding: 0; background: white; }
+            .tabs, .admin-panel, .btn-save, .header-section, .status-banner { display: none !important; }
+            .table-container { box-shadow: none; padding: 0; overflow: visible; }
+            table { font-size: 10px; min-width: 100%; }
+            th, td { padding: 4px; }
+        }
+    </style>
+    <!-- Firebase App and Database SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <!-- SheetJS for Excel & jsPDF for PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+    <div class="header-section">
+        <h1>GIBE III HEPP DAILY PARAMETER READING</h1>
+        <div id="networkStatus" class="status-banner online">Online - Connected to Firebase</div>
+        
+        <div class="meta-grid">
+            <div class="meta-item">
+                <label for="unitNo">Unit No.</label>
+                <select id="unitNo">
+                    <option value="#1">#1</option>
+                    <option value="#2">#2</option>
+                    <option value="#3">#3</option>
+                    <option value="#4">#4</option>
+                    <option value="#5">#5</option>
+                    <option value="#6">#6</option>
+                    <option value="#7">#7</option>
+                    <option value="#8">#8</option>
+                    <option value="#9">#9</option>
+                    <option value="#10">#10</option>
+                </select>
+            </div>
+            <div class="meta-item">
+                <label for="readingDate">Date</label>
+                <input type="date" id="readingDate">
+            </div>
+            <div class="meta-item" style="justify-content: flex-end;">
+                <button class="btn-action btn-blue" id="authBtn" onclick="toggleAuthModal()">Admin Login</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('genFloorTab')">Generator Floor</button>
+        <button class="tab-btn" onclick="switchTab('turbineFloorTab')">Turbine Floor</button>
+        <button class="tab-btn" onclick="switchTab('coolingTab')">Cooling & Air Systems</button>
+    </div>
+
+    <!-- TAB 1: GENERATOR FLOOR -->
+    <div id="genFloorTab" class="tab-content table-container">
+        <h2>Generator Floor Overview</h2>
+        <table id="tableGenFloor">
+            <thead>
+                <tr>
+                    <th rowspan="2">Time</th>
+                    <th>Lcu</th>
+                    <th>Governor</th>
+                    <th>Auxiliary</th>
+                    <th colspan="5">Excitation Temp.</th>
+                    <th>AC Distrib.</th>
+                    <th colspan="2">Air Cooler Temp.</th>
+                    <th colspan="7">Generator Bearing Pad & Oil Temp.</th>
+                    <th rowspan="2">Actions</th>
+                </tr>
+                <tr>
+                    <th>Turbine guide bearing oil level</th>
+                    <th>Water head (m)</th>
+                    <th>Auxiliary transformer Temp. °C (b)</th>
+                    <th>Excitation SCR-1 temp. (°C)</th>
+                    <th>Excitation SCR-2 temp. (°C)</th>
+                    <th>Excitation SCR-3 temp. (°C)</th>
+                    <th>Excitation transformer Wind'g Temp. °C (b)</th>
+                    <th>Excitation transformer Core Temp. °C (d)</th>
+                    <th>Unit auxiliary supply (400) voltage (v)</th>
+                    <th>Air cooler hot temp. 1# (°C)</th>
+                    <th>Air cooler hot temp. 2# (°C)</th>
+                    <th>Upper guide bearing oil temp. (°C)</th>
+                    <th>Upper guide bearing 1# pad temp. (°C)</th>
+                    <th>Upper guide bearing 2# pad temp. (°C)</th>
+                    <th>Lower guide bearing oil tank temp. (°C)</th>
+                    <th>Lower guide bearing 1# pad temp. (°C)</th>
+                    <th>Lower guide bearing 2# pad temp. (°C)</th>
+                    <th>Thrust bearing sump oil temp. (°C)</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyGenFloor"></tbody>
+        </table>
+    </div>
+
+    <!-- TAB 2: TURBINE FLOOR -->
+    <div id="turbineFloorTab" class="tab-content table-container hidden">
+        <h2>Turbine Floor Overview</h2>
+        <table id="tableTurbineFloor">
+            <thead>
+                <tr>
+                    <th rowspan="2">Time</th>
+                    <th colspan="5">Generator Bearing Pad & Oil Temp (Cont.)</th>
+                    <th colspan="3">Generator Air Cooler</th>
+                    <th>Gen. Brake</th>
+                    <th colspan="3">Pressure</th>
+                    <th colspan="2">Governor</th>
+                    <th colspan="3">Lower Guide Bearing</th>
+                    <th rowspan="2">Actions</th>
+                </tr>
+                <tr>
+                    <th>Thrust bearing 1#pad temp. (°C)</th>
+                    <th>Thrust bearing 2#pad temp. (°C)</th>
+                    <th>Turbine bearing sump oil temp. (°C)</th>
+                    <th>Turbine bearing 1#pad temp. (°C)</th>
+                    <th>Turbine bearing 2#pad temp. (°C)</th>
+                    <th>Generator air coolers inlet water temp. (°C)</th>
+                    <th>Generator air coolers outlet water temp. (°C)</th>
+                    <th>Generator air coolers inlet water pressure (bar)</th>
+                    <th>Generator or brake air pressure (Mpa)</th>
+                    <th>Spiral case water pressure IN (Mpa)</th>
+                    <th>Head cover water pressure (Mpa)</th>
+                    <th>Spiral case water pressure OUT (Mpa)</th>
+                    <th>Governor HP oil tank oil pressure (Mpa)</th>
+                    <th>Governor HP oil tank oil level (mm)</th>
+                    <th>Lower guide bearing inlet water temp. (°C)</th>
+                    <th>Lower guide bearing outlet water temp. (°C)</th>
+                    <th>Lower guide bearing inlet water pressure (bar)</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyTurbineFloor"></tbody>
+        </table>
+    </div>
+
+    <!-- TAB 3: COOLING & AIR SYSTEMS -->
+    <div id="coolingTab" class="tab-content table-container hidden">
+        <h2>Turbine Floor & Open/Close Circuit Cooling</h2>
+        <table id="tableCooling">
+            <thead>
+                <tr>
+                    <th rowspan="2">Time</th>
+                    <th colspan="5">Generator Bearing Cooling Water Pressure & Temp.</th>
+                    <th rowspan="2">Turbine guide bearing inlet water temp. (°C)</th>
+                    <th rowspan="2">Turbine guide bearing outlet water temp. (°C)</th>
+                    <th rowspan="2">Turbine guide bearing inlet water pressure (bar)</th>
+                    <th>Shaft Seal</th>
+                    <th>Shaft Seal</th>
+                    <th colspan="4">Generator Open & Close Circuit Cooling</th>
+                    <th colspan="2">Middle Air</th>
+                    <th>MIV</th>
+                    <th rowspan="2">Actions</th>
+                </tr>
+                <tr>
+                    <th>Upper guide bearing inlet water temp. (°C)</th>
+                    <th>Upper guide bearing outlet water temp. (°C)</th>
+                    <th>Upper guide bearing inlet water pressure (bar)</th>
+                    <th>Thrust bearing outlet water temp. (°C)</th>
+                    <th>Thrust bearing outlet water pressure (bar)</th>
+                    <th>water pressure (Mpa)</th>
+                    <th>water flow</th>
+                    <th>CW close circuit water pressure (bar)</th>
+                    <th>CW close circuit water flow</th>
+                    <th>CW open circuit water pressure (Mpa)</th>
+                    <th>CW open circuit water flow</th>
+                    <th>Middle air supply high pressure accumulator tank (Mpa)</th>
+                    <th>Middle air supply low pressure (Mpa)</th>
+                    <th>Main inlet valve oil pressure (Mpa)</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyCooling"></tbody>
+        </table>
+    </div>
+
+    <!-- SHIFT COORDINATORS & GENERAL INFO -->
+    <div class="table-container">
+        <h2>Shift Coordinators Details</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>SHIFT</th>
+                    <th>TIME</th>
+                    <th>GROUP COORDINATORS NAME</th>
+                    <th>SIGN.</th>
+                    <th>GROUP</th>
+                    <th>Save Shift Info</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Night</td>
+                    <td>22:00 - 07:00</td>
+                    <td><input type="text" id="coordNameNight"></td>
+                    <td><input type="text" id="coordSignNight"></td>
+                    <td><input type="text" id="coordGroupNight"></td>
+                    <td><button class="btn-save" onclick="saveShiftData('Night')">Save</button></td>
+                </tr>
+                <tr>
+                    <td>Morning</td>
+                    <td>07:00 - 15:00</td>
+                    <td><input type="text" id="coordNameMorning"></td>
+                    <td><input type="text" id="coordSignMorning"></td>
+                    <td><input type="text" id="coordGroupMorning"></td>
+                    <td><button class="btn-save" onclick="saveShiftData('Morning')">Save</button></td>
+                </tr>
+                <tr>
+                    <td>Evening</td>
+                    <td>15:00 - 22:00</td>
+                    <td><input type="text" id="coordNameEvening"></td>
+                    <td><input type="text" id="coordSignEvening"></td>
+                    <td><input type="text" id="coordGroupEvening"></td>
+                    <td><button class="btn-save" onclick="saveShiftData('Evening')">Save</button></td>
+                </tr>
+            </tbody>
+        </table>
+        <div style="margin-top: 15px;">
+            <label style="font-weight: bold; color: var(--primary-color);">Information to be transferred to the next shift attendants:</label>
+            <textarea id="transferNotes" style="width: 100%; height: 80px; margin-top: 5px; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px;"></textarea>
+            <button class="btn-action btn-blue" style="margin-top: 5px;" onclick="saveTransferNotes()">Save Notes</button>
+        </div>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div class="admin-panel" id="adminPanel">
+        <h3>Admin Management Dashboard</h3>
+        <div class="control-row">
+            <input type="date" id="filterDate">
+            <button class="btn-action btn-blue" onclick="filterByDate()">Date Filter</button>
+            <input type="text" id="searchBox" placeholder="Search parameters..." onkeyup="searchTable()">
+            <button class="btn-action btn-green" onclick="exportToExcel()">Excel Export</button>
+            <button class="btn-action btn-green" onclick="exportToPDF()">PDF Export</button>
+            <button class="btn-action btn-blue" onclick="window.print()">Print Report</button>
+            <button class="btn-action btn-red" id="clearBtn" onclick="clearSelectedDateData()" disabled>Delete Date Records</button>
+        </div>
+        <p id="adminStatusMsg" style="color: red; font-style: italic;">*Login as Admin to enable Delete capabilities.</p>
+    </div>
+
+    <!-- LOGIN MODAL -->
+    <div id="loginModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Admin Sign In</h3>
+            <input type="email" id="emailInput" placeholder="Admin Email">
+            <input type="password" id="passwordInput" placeholder="Password">
+            <button class="btn-action btn-blue" style="width: 100%; margin-top: 10px;" onclick="handleAuth()">Login</button>
+            <button class="btn-action btn-red" style="width: 100%; margin-top: 5px;" onclick="toggleAuthModal()">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        // --- FIREBASE CONFIGURATION ---
+        // Replace with your real Firebase web configuration values
+    // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyBw8Zs-khqWwLR17nthV9Db5zkaYYOW23c",
+  authDomain: "gibe3eepdallyparameterreading.firebaseapp.com",
+  projectId: "gibe3eepdallyparameterreading",
+  storageBucket: "gibe3eepdallyparameterreading.firebasestorage.app",
+  messagingSenderId: "248775159613",
+  appId: "1:248775159613:web:9c8232a71c67d87c0f9f54",
+  measurementId: "G-DS6FX4BG7R"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+        // Initialize Firebase if config is replaced, otherwise simulate local
+        let db = null;
+        let isOnline = false;
+        if(firebaseConfig.apiKey !== "YOUR_API_KEY") {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+            
+            // Monitor Connection Status
+            db.ref(".info/connected").on("value", (snap) => {
+                if (snap.val() === true) {
+                    isOnline = true;
+                    document.getElementById('networkStatus').className = "status-banner online";
+                    document.getElementById('networkStatus').innerText = "Online - Synced with Firebase";
+                    syncLocalToFirebase();
+                } else {
+                    isOnline = false;
+                    document.getElementById('networkStatus').className = "status-banner offline";
+                    document.getElementById('networkStatus').innerText = "Offline Mode - Saving locally to browser storage";
+                }
+            });
+        } else {
+            console.log("Running in pure local/offline test mode until Firebase Config is updated.");
+            document.getElementById('networkStatus').className = "status-banner offline";
+            document.getElementById('networkStatus').innerText = "Demo Offline Mode (Configure Firebase for remote sync)";
+        }
+
+        const times = ["1:00", "3:00", "5:00", "7:00", "9:00", "11:00", "13:00", "15:00", "17:00", "19:00", "21:00", "23:00", "Max"];
+        let isAdmin = false;
+
+        // Automatically manage Date & Handle the 24:00 rollover
+        function initDate() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const currentDateStr = `${year}-${month}-${day}`;
+            
+            document.getElementById('readingDate').value = currentDateStr;
+            document.getElementById('filterDate').value = currentDateStr;
+
+            // Check every minute if day changed (after 24:00)
+            setInterval(() => {
+                const checkNow = new Date();
+                const checkDay = String(checkNow.getDate()).padStart(2, '0');
+                if(checkDay !== day) {
+                    window.location.reload(); // Refresh to set new date autonomously
+                }
+            }, 60000);
+        }
+
+        // Generate Rows dynamically
+        function generateTables() {
+            const genFields = 18; // 18 parameter columns for Generator floor
+            const turbFields = 17; // 17 columns
+            const coolFields = 16; // 16 columns
+
+            const tbodyGen = document.getElementById('tbodyGenFloor');
+            const tbodyTurb = document.getElementById('tbodyTurbineFloor');
+            const tbodyCool = document.getElementById('tbodyCooling');
+
+            times.forEach(time => {
+                // Table 1 Row
+                let tr = document.createElement('tr');
+                tr.innerHTML = `<td><b>${time}</b></td>` + 
+                    Array.from({length: genFields}, (_, i) => `<td><input type="number" step="any" id="gen_${time.replace(':','_')}_${i}" onchange="markDirty()"></td>`).join('') +
+                    `<td><button class="btn-save" onclick="saveRow('gen', '${time}')">Save</button></td>`;
+                tbodyGen.appendChild(tr);
+
+                // Table 2 Row
+                tr = document.createElement('tr');
+                tr.innerHTML = `<td><b>${time}</b></td>` + 
+                    Array.from({length: turbFields}, (_, i) => `<td><input type="number" step="any" id="turb_${time.replace(':','_')}_${i}" onchange="markDirty()"></td>`).join('') +
+                    `<td><button class="btn-save" onclick="saveRow('turb', '${time}')">Save</button></td>`;
+                tbodyTurb.appendChild(tr);
+
+                // Table 3 Row
+                tr = document.createElement('tr');
+                tr.innerHTML = `<td><b>${time}</b></td>` + 
+                    Array.from({length: coolFields}, (_, i) => `<td><input type="number" step="any" id="cool_${time.replace(':','_')}_${i}" onchange="markDirty()"></td>`).join('') +
+                    `<td><button class="btn-save" onclick="saveRow('cool', '${time}')">Save</button></td>`;
+                tbodyCool.appendChild(tr);
+            });
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabId).classList.remove('hidden');
+            event.currentTarget.classList.add('active');
+        }
+
+        function toggleAuthModal() {
+            if(isAdmin) {
+                isAdmin = false;
+                document.getElementById('authBtn').innerText = "Admin Login";
+                document.getElementById('clearBtn').disabled = true;
+                document.getElementById('adminStatusMsg').style.display = "block";
+                alert("Logged out as Admin.");
+            } else {
+                document.getElementById('loginModal').classList.toggle('hidden');
+            }
+        }
+
+        function handleAuth() {
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            
+            if(firebaseConfig.apiKey !== "YOUR_API_KEY") {
+                firebase.auth().signInWithEmailAndPassword(email, password)
+                .then(() => {
+                    loginSuccess();
+                }).catch(err => alert("Error: " + err.message));
+            } else {
+                // Mock login for offline testing
+                if(email === "admin@gibe3.gov.et" && password === "admin123") {
+                    loginSuccess();
+                } else {
+                    alert("Invalid mock credentials (Use: admin@gibe3.gov.et / admin123)");
+                }
+            }
+        }
+
+        function loginSuccess() {
+            isAdmin = true;
+            document.getElementById('authBtn').innerText = "Logout Admin";
+            document.getElementById('clearBtn').disabled = false;
+            document.getElementById('adminStatusMsg').style.display = "none";
+            document.getElementById('loginModal').classList.add('hidden');
+            alert("Authenticated successfully as Administrator!");
+        }
+
+        // Local & Remote Saving Logic per Row
+        function getStorageKey() {
+            const date = document.getElementById('readingDate').value;
+            const unit = document.getElementById('unitNo').value;
+            return `Gibe3_${date}_Unit${unit.replace('#','')}`;
+        }
+
+        function saveRow(section, time) {
+            const key = getStorageKey();
+            let localData = JSON.parse(localStorage.getItem(key)) || {};
+            if(!localData[section]) localData[section] = {};
+            localData[section][time] = {};
+
+            const prefix = `${section}_${time.replace(':','_')}_`;
+            const inputs = document.querySelectorAll(`[id^="${prefix}"]`);
+            
+            inputs.forEach(input => {
+                const idSplit = input.id.split('_');
+                const idx = idSplit[idSplit.length - 1];
+                localData[section][time][idx] = input.value;
+            });
+
+            // Save to offline storage immediately
+            localStorage.setItem(key, JSON.stringify(localData));
+            
+            // Queue sync for online database
+            if(isOnline && db) {
+                db.ref(`readings/${key}/${section}/${time.replace(':','_')}`).set(localData[section][time])
+                .then(() => alert(`Row ${time} successfully saved offline and synced to cloud!`))
+                .catch(() => alert(`Saved locally (Offline). Connection to cloud pending.`));
+            } else {
+                alert(`Row ${time} successfully saved offline inside your browser!`);
+                markOfflinePending(key);
+            }
+        }
+
+        function saveShiftData(shift) {
+            const key = getStorageKey();
+            let localData = JSON.parse(localStorage.getItem(key)) || {};
+            if(!localData.shift) localData.shift = {};
+            
+            localData.shift[shift] = {
+                name: document.getElementById(`coordName${shift}`).value,
+                sign: document.getElementById(`coordSign${shift}`).value,
+                group: document.getElementById(`coordGroup${shift}`).value
+            };
+
+            localStorage.setItem(key, JSON.stringify(localData));
+            if(isOnline && db) {
+                db.ref(`readings/${key}/shift/${shift}`).set(localData.shift[shift]);
+            }
+            alert(`Shift info for ${shift} saved successfully!`);
+        }
+
+        function saveTransferNotes() {
+            const key = getStorageKey();
+            let localData = JSON.parse(localStorage.getItem(key)) || {};
+            localData.notes = document.getElementById('transferNotes').value;
+            
+            localStorage.setItem(key, JSON.stringify(localData));
+            if(isOnline && db) {
+                db.ref(`readings/${key}/notes`).set(localData.notes);
+            }
+            alert("Transfer notes saved!");
+        }
+
+        function markOfflinePending(key) {
+            let pendings = JSON.parse(localStorage.getItem('gibe3_pending_sync')) || [];
+            if(!pendings.includes(key)) {
+                pendings.push(key);
+                localStorage.setItem('gibe3_pending_sync', JSON.stringify(pendings));
+            }
+        }
+
+        function syncLocalToFirebase() {
+            let pendings = JSON.parse(localStorage.getItem('gibe3_pending_sync')) || [];
+            if(pendings.length === 0 || !db) return;
+
+            pendings.forEach(key => {
+                const localData = JSON.parse(localStorage.getItem(key));
+                if(localData) {
+                    db.ref(`readings/${key}`).update(localData).then(() => {
+                        pendings = pendings.filter(k => k !== key);
+                        localStorage.setItem('gibe3_pending_sync', JSON.stringify(pendings));
+                    });
+                }
+            });
+        }
+
+        function loadData() {
+            const key = getStorageKey();
+            // Try loading from localStorage first
+            let data = JSON.parse(localStorage.getItem(key));
+            
+            if(data) {
+                populateInputs(data);
+            } else if(isOnline && db) {
+                // If not local, try fetching from firebase
+                db.ref(`readings/${key}`).once('value', (snapshot) => {
+                    if(snapshot.exists()) {
+                        const cloudData = snapshot.val();
+                        localStorage.setItem(key, JSON.stringify(cloudData));
+                        populateInputs(cloudData);
+                    } else {
+                        clearAllInputs();
+                    }
+                });
+            } else {
+                clearAllInputs();
+            }
+        }
+
+        function populateInputs(data) {
+            clearAllInputs();
+            ['gen', 'turb', 'cool'].forEach(sec => {
+                if(data[sec]) {
+                    for (const [time, vals] of Object.entries(data[sec])) {
+                        for (const [idx, val] of Object.entries(vals)) {
+                            const input = document.getElementById(`${sec}_${time.replace(':','_')}_${idx}`);
+                            if(input) input.value = val;
+                        }
+                    }
+                }
+            });
+            if(data.shift) {
+                ['Night', 'Morning', 'Evening'].forEach(s => {
+                    if(data.shift[s]) {
+                        document.getElementById(`coordName${s}`).value = data.shift[s].name || '';
+                        document.getElementById(`coordSign${s}`).value = data.shift[s].sign || '';
+                        document.getElementById(`coordGroup${s}`).value = data.shift[s].group || '';
+                    }
+                });
+            }
+            if(data.notes) document.getElementById('transferNotes').value = data.notes;
+        }
+
+        function clearAllInputs() {
+            document.querySelectorAll('input[type="number"], table input[type="text"]').forEach(i => i.value = '');
+            document.getElementById('transferNotes').value = '';
+        }
+
+        function filterByDate() {
+            const fDate = document.getElementById('filterDate').value;
+            document.getElementById('readingDate').value = fDate;
+            loadData();
+        }
+
+        function clearSelectedDateData() {
+            if(!isAdmin) return alert("Unauthorized access!");
+            if(confirm("Are you absolutely sure you want to delete all entries for the selected date/unit completely?")) {
+                const key = getStorageKey();
+                localStorage.removeItem(key);
+                if(isOnline && db) {
+                    db.ref(`readings/${key}`).remove();
+                }
+                clearAllInputs();
+                alert("Records dropped successfully.");
+            }
+        }
+
+        function searchTable() {
+            const term = document.getElementById('searchBox').value.toLowerCase();
+            document.querySelectorAll('tbody tr').forEach(tr => {
+                const text = tr.innerText.toLowerCase();
+                tr.style.display = text.includes(term) ? '' : 'none';
+            });
+        }
+
+        // EXPORTS
+        function exportToExcel() {
+            const wb = XLSX.utils.book_new();
+            
+            const ws1 = XLSX.utils.table_to_sheet(document.getElementById('tableGenFloor'));
+            XLSX.utils.book_append_sheet(wb, ws1, "Generator Floor");
+            
+            const ws2 = XLSX.utils.table_to_sheet(document.getElementById('tableTurbineFloor'));
+            XLSX.utils.book_append_sheet(wb, ws2, "Turbine Floor");
+            
+            const ws3 = XLSX.utils.table_to_sheet(document.getElementById('tableCooling'));
+            XLSX.utils.book_append_sheet(wb, ws3, "Cooling & Air Systems");
+            
+            const date = document.getElementById('readingDate').value;
+            XLSX.writeFile(wb, `Gibe3_Parameter_Reading_${date}.xlsx`);
+        }
+
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a3'); // A3 Horizontal layout due to vast number of fields
+            
+            doc.text("GIBE III HEPP DAILY PARAMETER READING", 15, 15);
+            doc.text(`Unit: ${document.getElementById('unitNo').value}   Date: ${document.getElementById('readingDate').value}`, 15, 23);
+            
+            doc.autoTable({ html: '#tableGenFloor', startY: 30, theme: 'grid', styles: { fontSize: 7 } });
+            doc.addPage();
+            doc.text("GIBE III HEPP DAILY PARAMETER READING (Cont.)", 15, 15);
+            doc.autoTable({ html: '#tableTurbineFloor', startY: 30, theme: 'grid', styles: { fontSize: 7 } });
+            
+            doc.save(`Gibe3_Parameter_Reading_${document.getElementById('readingDate').value}.pdf`);
+        }
+
+        function markDirty() {}
+
+        // Event listeners & Startup
+        window.onload = () => {
+            initDate();
+            generateTables();
+            loadData();
+            document.getElementById('unitNo').addEventListener('change', loadData);
+            document.getElementById('readingDate').addEventListener('change', loadData);
+        };
+    </script>
+</body>
+</html>
